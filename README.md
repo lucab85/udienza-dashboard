@@ -7,9 +7,9 @@ Private, self-hosted Metabase Community Edition dashboard for `dashboard.udienza
 - **Metabase** — private dashboards, native account login, questions, and collections.
 - **PostgreSQL** — Metabase application metadata plus a separate `udienza` analytics database.
 - **Cloudflare (proxy or Tunnel) + Access** — public entry and login gate for `dashboard.udienza.com`, through the host's shared Caddy (no ports published by this stack).
-- **Node.js worker** — every 24 hours imports episodes from the audio RSS feed, enriched with the video feed, YouTube views/likes/comments, OP3 podcast downloads, and manually supplied analytics exports.
+- **Node.js worker** — imports Udienza episode metadata from the live audio RSS feed; enriches with video feed, optional YouTube views, and manually supplied analytics exports every 24 hours.
 
-> **Data availability:** A fresh installation automatically imports episodes but **does not fabricate metrics**. YouTube public view counters require an API key and per-episode ID mapping. OP3 downloads are imported from the OP3 API once OP3 has seen the show; Apple and Spotify metrics are CSV imports, not live connectors. Sponsor accounts, dashboards and campaigns must be created/configured after first launch.
+> **Data availability:** A fresh installation automatically imports episodes but **does not fabricate metrics**. YouTube public view counters require an API key and per-episode ID mapping. OP3, Apple, and Spotify metrics are currently CSV imports, not live connectors. Sponsor accounts, dashboards and campaigns must be created/configured after first launch.
 
 ## Requirements
 
@@ -101,19 +101,7 @@ The overview dashboard covers episodes, releases and YouTube/OP3 totals. Further
 
 The worker imports published public view counters, **not** YouTube watch time, demographic information, or private channel analytics. Those require OAuth/YouTube Analytics authorization in a future integration.
 
-## OP3 podcast downloads
-
-Both feeds prefix their media URLs with `https://op3.dev/e/` (in the website repository), so OP3 logs every podcast-app download. OP3 tracks the audio and video feeds as two shows, found by each feed's `podcast:guid`.
-
-1. Create an API key with `read-data` at https://op3.dev/api/keys and put its bearer token in `.env` as `OP3_API_TOKEN`.
-2. The worker resolves each show, imports new download rows into `op3_downloads` (time, file, audio/video, app, device, country, region; no IP data), and writes per-episode totals (`downloads`, `downloads_audio`, `downloads_video`) to `episode_metrics`. Until OP3 has seen a download it logs `OP3 has no show yet`.
-3. The `op3_downloads_counted` view counts one download per audience, file and UTC day, and is what the **Udienza – Audience** dashboard uses: audio vs video, episodes, countries, apps, devices, regions, first 7/30 days.
-
-## Schema changes
-
-`sql/init.sql` runs only on an empty PostgreSQL volume. Later changes go in `sql/migrations/NNN_name.sql` as idempotent statements (`CREATE … IF NOT EXISTS`, `CREATE OR REPLACE VIEW` appending columns); the worker applies them in name order before every sync.
-
-## Import Apple or Spotify exports
+## Import OP3, Apple or Spotify exports
 
 Add validated rows to `examples/metrics.csv`:
 
@@ -122,7 +110,7 @@ guid,date,platform,metric,value,measurement_type
 actual-guid-from-feed,2026-10-17,op3,downloads,120,cumulative
 ```
 
-OP3 rows come from the API; do not add them here. Use `daily` only for measurements covering exactly that date and `cumulative` for counters as of that date. The file is a **manual normalized import format**, not a direct export from the podcast services; transform service exports before importing. No numbers are displayed unless actually imported. Restart `ingest` to import immediately.
+Use `daily` only for measurements covering exactly that date and `cumulative` for counters as of that date. The file is a **manual normalized import format**, not a direct export from the podcast services; transform service exports before importing. No numbers are displayed unless actually imported. Restart `ingest` to import immediately.
 
 ## Sponsor access and security
 
