@@ -1,0 +1,72 @@
+name: udienza-dashboard
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: udienza
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: udienza
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U udienza -d udienza"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  metabase:
+    image: metabase/metabase:v0.63.17.3
+    restart: unless-stopped
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: 5432
+      MB_DB_USER: udienza
+      MB_DB_PASS: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      MB_DB_HOST: postgres
+      MB_SITE_URL: https://${DASHBOARD_HOST:-dashboard.udienza.com}
+      JAVA_TIMEZONE: UTC
+    networks: [internal]
+    # No public Metabase port: reach it only through Caddy.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [metabase]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DASHBOARD_HOST: ${DASHBOARD_HOST:-dashboard.udienza.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [internal]
+
+  ingest:
+    build: ./ingest
+    restart: unless-stopped
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      DATABASE_URL: postgresql://udienza:${POSTGRES_PASSWORD}@postgres:5432/udienza
+      AUDIO_FEED_URL: ${AUDIO_FEED_URL:-https://www.udienza.com/feed.xml}
+      VIDEO_FEED_URL: ${VIDEO_FEED_URL:-https://www.udienza.com/feed-video.xml}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      SYNC_INTERVAL_HOURS: ${SYNC_INTERVAL_HOURS:-24}
+    volumes:
+      - ./examples:/app/data:ro
+    networks: [internal]
+
+networks:
+  internal:
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

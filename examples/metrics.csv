@@ -1,0 +1,2 @@
+# Optional manual analytics export: guid,date,platform,metric,value,measurement_type
+# example-guid,2026-10-17,op3,downloads,120,cumulative
