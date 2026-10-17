@@ -1,2 +1,3 @@
-# Optional: one row per episode, with its stable audio RSS GUID and YouTube video ID.
+# Optional overrides: the worker reads YouTube IDs from the feeds' show notes.
+# Add a row only for an episode whose ID is missing or wrong there.
 # guid,youtube_id
