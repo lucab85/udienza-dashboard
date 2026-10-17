@@ -62,6 +62,21 @@ services:
       - ./examples:/app/data:ro
     networks: [internal]
 
+  # One-shot, idempotent Metabase provisioning (data source, questions,
+  # dashboard): docker compose run --rm metabase-setup
+  metabase-setup:
+    image: node:22-alpine
+    profiles: [tools]
+    depends_on: [metabase]
+    environment:
+      MB_URL: http://metabase:3000
+      MB_API_KEY: ${MB_API_KEY:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./scripts:/scripts:ro
+    command: ["node", "/scripts/metabase-setup.mjs"]
+    networks: [internal]
+
 networks:
   internal:
   # Shared network of the host's main stack (/opt/apps), where the Caddy
