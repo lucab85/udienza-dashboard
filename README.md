@@ -26,9 +26,11 @@ cd /opt/udienza-dashboard
 cp .env.example .env
 openssl rand -hex 32   # paste output into POSTGRES_PASSWORD in .env
 chmod 600 .env
-docker compose up -d --build
+scripts/deploy.sh --no-pull
 docker compose logs -f ingest
 ```
+
+`scripts/deploy.sh` checks `.env` and the shared network, then runs `docker compose up -d --build` and, if `MB_API_KEY` is set, the Metabase provisioning below. Re-run it (without `--no-pull`) after every merge to `main`: it pulls, rebuilds and re-provisions.
 
 **Do not proceed with a default/placeholder password.**
 
@@ -62,22 +64,26 @@ docker compose logs -f ingest
 3. In Zero Trust → **Access → Applications**, add a self-hosted application for `dashboard.udienza.com` with a policy allowing only the intended emails (as for postiz). Sponsors must be in this policy as well as in Metabase. With the `A` record, the origin IP stays reachable directly, so Access is not a hard boundary there; Metabase login still applies.
 4. Open `https://dashboard.udienza.com` and create the first Metabase administrator account immediately.
 
-In Metabase, choose **Add database → PostgreSQL**:
+### Provision Metabase
 
-| Field | Value |
-| --- | --- |
-| Display name | Udienza Analytics |
-| Host | `udienza-postgres` (not `postgres`: on the shared network that name is the main stack's database) |
-| Port | `5432` |
-| Database | `udienza` |
-| Username | `udienza` |
-| Password | value of `POSTGRES_PASSWORD` |
+After creating the first administrator account:
+
+1. In Metabase, **Admin → Settings → Authentication → API keys → Create API key**, group **Administrators**. Put it in `.env` as `MB_API_KEY`.
+2. Run `docker compose run --rm metabase-setup` (`scripts/deploy.sh` does it too).
+
+The script (`scripts/metabase-setup.mjs`) is idempotent: it matches everything by name and updates it in place. It:
+
+- connects the `Udienza Analytics` PostgreSQL data source (host `udienza-postgres`, not `postgres`: on the shared network that name is the main stack's database);
+- removes the Sample Database and archives the Examples collection;
+- creates the `Udienza` collection with its questions and the **Udienza – Overview** dashboard, set as the home page.
+
+Change questions or layout in the script rather than in the UI: the next run overwrites edits to those questions.
 
 The initial database creation SQL executes only when the PostgreSQL volume is empty. For later schema changes, use migrations (do **not** delete the volume).
 
-## First charts
+## More charts
 
-Use Metabase's notebook query builder against `episode_overview`:
+The overview dashboard covers episodes, releases and YouTube/OP3 totals. Further ideas, against `episode_overview`:
 
 1. Episode views: list `title`, `youtube_views_latest`, `op3_downloads_latest`.
 2. Releases by month: group `episodes.published_at` by month, count rows.
