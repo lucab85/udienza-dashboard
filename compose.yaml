@@ -58,8 +58,10 @@ services:
       VIDEO_FEED_URL: ${VIDEO_FEED_URL:-https://www.udienza.com/feed-video.xml}
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       SYNC_INTERVAL_HOURS: ${SYNC_INTERVAL_HOURS:-24}
+      OP3_API_TOKEN: ${OP3_API_TOKEN:-}
     volumes:
       - ./examples:/app/data:ro
+      - ./sql:/app/sql:ro
     networks: [internal]
 
   # One-shot, idempotent Metabase provisioning (data source, questions,
