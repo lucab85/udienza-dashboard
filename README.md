@@ -90,7 +90,7 @@ Use Metabase's notebook query builder against `episode_overview`:
 
 1. Create an API key enabled for **YouTube Data API v3**. Restrict the key appropriately (API restriction plus suitable network restriction for your VPS).
 2. Put the key in `.env` as `YOUTUBE_API_KEY` (never in the CSV or repository).
-3. Fill `examples/youtube-mapping.csv` with `guid,youtube_id` for each episode (use the exact GUID from the feed; video ID is 11 characters). Comment lines beginning with `#` are ignored.
+3. The worker reads each episode's YouTube ID from the YouTube link in the feed show notes. Only if one is missing or wrong, add `guid,youtube_id` to `examples/youtube-mapping.csv` (exact GUID from the audio feed; 11-character video ID).
 4. Run `docker compose up -d --force-recreate ingest` and `docker compose logs -f ingest`.
 
 The worker imports published public view counters, **not** YouTube watch time, demographic information, or private channel analytics. Those require OAuth/YouTube Analytics authorization in a future integration.

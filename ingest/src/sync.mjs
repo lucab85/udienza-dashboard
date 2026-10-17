@@ -7,6 +7,7 @@ const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_
 const array = v => v == null ? [] : Array.isArray(v) ? v : [v];
 const string = v => typeof v === 'string' ? v : (v?.['#text'] || '');
 const today = new Date().toISOString().slice(0, 10);
+const youtubeId = text => text.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/)?.[1] || null;
 
 async function loadFeed(url) {
   const res = await fetch(url, { signal: AbortSignal.timeout(30000), headers: { 'User-Agent': 'UdienzaSponsorDashboard/0.1' } });
@@ -28,7 +29,8 @@ function parseEpisode(item) {
   return { guid, title, url: string(item.link) || null,
     published: published && !Number.isNaN(published.valueOf()) ? published.toISOString() : null,
     audio: mime.startsWith('audio/') ? media : null,
-    video: mime.startsWith('video/') ? media : null };
+    video: mime.startsWith('video/') ? media : null,
+    youtube: youtubeId(`${string(item['content:encoded'])} ${string(item.description)}`) };
 }
 
 async function importFeeds() {
@@ -41,12 +43,13 @@ async function importFeeds() {
   const videosByTitle = new Map(video.map(e => [e.title.toLowerCase(), e]));
   for (const e of audio) {
     const matching = videosByUrl.get(e.url?.replace(/\/$/, '')) || videosByTitle.get(e.title.toLowerCase());
-    await db.query(`INSERT INTO episodes (guid,title,episode_url,published_at,audio_url,video_url)
-      VALUES ($1,$2,$3,$4,$5,$6)
+    await db.query(`INSERT INTO episodes (guid,title,episode_url,published_at,audio_url,video_url,youtube_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
       ON CONFLICT (guid) DO UPDATE SET title=EXCLUDED.title, episode_url=EXCLUDED.episode_url,
       published_at=EXCLUDED.published_at, audio_url=EXCLUDED.audio_url,
-      video_url=COALESCE(EXCLUDED.video_url,episodes.video_url), updated_at=now()`,
-      [e.guid, e.title, e.url, e.published, e.audio, matching?.video || null]);
+      video_url=COALESCE(EXCLUDED.video_url,episodes.video_url),
+      youtube_id=COALESCE(EXCLUDED.youtube_id,episodes.youtube_id), updated_at=now()`,
+      [e.guid, e.title, e.url, e.published, e.audio, matching?.video || null, matching?.youtube || e.youtube]);
   }
   console.log(`Imported ${audio.length} audio episodes (${video.length} video entries available)`);
 }
