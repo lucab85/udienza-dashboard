@@ -10,12 +10,17 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    mem_limit: 256m
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U udienza -d udienza"]
       interval: 10s
       timeout: 5s
       retries: 10
-    networks: [internal]
+    networks:
+      internal:
+        # Unique name: metabase also joins "apps", where "postgres" is the
+        # main stack's database.
+        aliases: [udienza-postgres]
 
   metabase:
     image: metabase/metabase:v0.63.17.3
@@ -28,30 +33,23 @@ services:
       MB_DB_PORT: 5432
       MB_DB_USER: udienza
       MB_DB_PASS: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      MB_DB_HOST: postgres
+      MB_DB_HOST: udienza-postgres
       MB_SITE_URL: https://${DASHBOARD_HOST:-dashboard.udienza.com}
       JAVA_TIMEZONE: UTC
-    networks: [internal]
-    # No public Metabase port: reach it only through Caddy.
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    depends_on: [metabase]
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DASHBOARD_HOST: ${DASHBOARD_HOST:-dashboard.udienza.com}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks: [internal]
+      # Keep the JVM inside mem_limit on a shared, RAM-tight host.
+      JAVA_OPTS: -Xmx640m -XX:+UseSerialGC
+    mem_limit: 900m
+    # No published port. Public traffic: Cloudflare Tunnel (Access) ->
+    # shared Caddy :8080 on the "apps" network -> udienza-metabase:3000.
+    networks:
+      internal:
+      apps:
+        aliases: [udienza-metabase]
 
   ingest:
     build: ./ingest
     restart: unless-stopped
+    mem_limit: 256m
     depends_on:
       postgres: {condition: service_healthy}
     environment:
@@ -66,7 +64,10 @@ services:
 
 networks:
   internal:
+  # Shared network of the host's main stack (/opt/apps), where the Caddy
+  # that cloudflared targets lives. Same pattern as postiz/twenty.
+  apps:
+    name: apps_apps
+    external: true
 volumes:
   postgres_data:
-  caddy_data:
-  caddy_config:
